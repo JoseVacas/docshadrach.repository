@@ -11,6 +11,9 @@ import traceback
 import cookielib
 from BeautifulSoup import BeautifulStoneSoup, BeautifulSoup, BeautifulSOAP
 try:
+    from xml.sax.saxutils import escape
+except: traceback.print_exc()
+try:
     import json
 except:
     import simplejson as json
@@ -163,6 +166,7 @@ def makeRequest(url, headers=None):
 
 
 def getSources():
+	try:
 		if os.path.exists(favorites) == True:
 			FAV = open(favorites).read()
 			if FAV == "[]":
@@ -205,6 +209,8 @@ def getSources():
 					getData(sources[0][1].encode('utf-8'),FANART)
 				else:
 					getData(sources[0]['url'], sources[0]['fanart'])
+	except: traceback.print_exc()
+
 
 
 def addSource(url=None):
@@ -569,9 +575,20 @@ def getItems(items,fanart):
         add_playlist = addon.getSetting('add_playlist')
         ask_playlist_items =addon.getSetting('ask_playlist_items')
         use_thumb = addon.getSetting('use_thumb')
+        parentalblock =addon.getSetting('parentalblocked')
+        parentalblock= parentalblock=="true"
         for item in items:
             isXMLSource=False
             isJsonrpc = False
+            
+            applyblock='false'
+            try:
+                applyblock = item('parentalblock')[0].string
+            except:
+                addon_log('parentalblock Error')
+                applyblock = ''
+            if applyblock=='true' and parentalblock: continue
+                
             try:
                 name = item('title')[0].string
                 if name is None:
@@ -811,16 +828,16 @@ def parse_regex(reg_item):
                     for i in reg_item:
                         regexs[i('name')[0].string] = {}
                         regexs[i('name')[0].string]['name']=i('name')[0].string
-                        #regexs[i('name')[0].string]['expre'] = i('expres')[0].string
+                        #regexs[i('name')[0].string]['expres'] = i('expres')[0].string
                         try:
-                            regexs[i('name')[0].string]['expre'] = i('expres')[0].string
-                            if not regexs[i('name')[0].string]['expre']:
-                                regexs[i('name')[0].string]['expre']=''
+                            regexs[i('name')[0].string]['expres'] = i('expres')[0].string
+                            if not regexs[i('name')[0].string]['expres']:
+                                regexs[i('name')[0].string]['expres']=''
                         except:
                             addon_log("Regex: -- No Referer --")
                         regexs[i('name')[0].string]['page'] = i('page')[0].string
                         try:
-                            regexs[i('name')[0].string]['refer'] = i('referer')[0].string
+                            regexs[i('name')[0].string]['referer'] = i('referer')[0].string
                         except:
                             addon_log("Regex: -- No Referer --")
                         try:
@@ -850,20 +867,13 @@ def parse_regex(reg_item):
                         except:
                             addon_log("Regex: -- No includeheaders --")
 
-                        try:
-                            regexs[i('name')[0].string]['listtitle'] = i('listtitle')[0].string
-                        except:
-                            addon_log("Regex: -- No listtitle --")
                             
                         try:
-                            regexs[i('name')[0].string]['listlink'] = i('listlink')[0].string
+                            regexs[i('name')[0].string]['listrepeat'] = i('listrepeat')[0].string
+                            print 'listrepeat',regexs[i('name')[0].string]['listrepeat'],i('listrepeat')[0].string, i
                         except:
-                            addon_log("Regex: -- No listlink --")
-
-                        try:
-                            regexs[i('name')[0].string]['listthumbnail'] = i('listthumbnail')[0].string
-                        except:
-                            addon_log("Regex: -- No listthumbnail --")                            
+                            addon_log("Regex: -- No listrepeat --")
+                    
                             
 
                         try:
@@ -1066,8 +1076,8 @@ def getRegexParsed(regexs, url,cookieJar=None,forCookieJarOnly=False,recursiveCa
                         req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:14.0) Gecko/20100101 Firefox/14.0.1')
                         proxytouse=None
 
-                        if 'refer' in m:
-                            req.add_header('Referer', m['refer'])
+                        if 'referer' in m:
+                            req.add_header('Referer', m['referer'])
                         if 'accept' in m:
                             req.add_header('Accept', m['accept'])
                         if 'agent' in m:
@@ -1176,48 +1186,41 @@ def getRegexParsed(regexs, url,cookieJar=None,forCookieJarOnly=False,recursiveCa
                             link=val
                         else:
                             link=m['page']
-                if '$pyFunction:playmedia(' in m['expre'] or 'ActivateWindow'  in m['expre']  or '$PLAYERPROXY$=' in url  or  any(x in url for x in g_ignoreSetResolved):
+                if '$pyFunction:playmedia(' in m['expres'] or 'ActivateWindow'  in m['expres']  or '$PLAYERPROXY$=' in url  or  any(x in url for x in g_ignoreSetResolved):
                     setresolved=False
-                if  '$doregex' in m['expre']:
-                    m['expre']=getRegexParsed(regexs, m['expre'],cookieJar,recursiveCall=True,cachedPages=cachedPages)
-                if not m['expre']=='':
-                    print 'doing it ',m['expre']
-                    if '$LiveStreamCaptcha' in m['expre']:
+                if  '$doregex' in m['expres']:
+                    m['expres']=getRegexParsed(regexs, m['expres'],cookieJar,recursiveCall=True,cachedPages=cachedPages)
+                if not m['expres']=='':
+                    print 'doing it ',m['expres']
+                    if '$LiveStreamCaptcha' in m['expres']:
                         val=askCaptcha(m,link,cookieJar)
                         #print 'url and val',url,val
                         url = url.replace("$doregex[" + k + "]", val)
-                    elif m['expre'].startswith('$pyFunction:') or '#$pyFunction' in m['expre']:
-                        #print 'expeeeeeeeeeeeeeeeeeee',m['expre']
-                        if m['expre'].startswith('$pyFunction:'):
-                            val=doEval(m['expre'].split('$pyFunction:')[1],link,cookieJar,m)
+                    elif m['expres'].startswith('$pyFunction:') or '#$pyFunction' in m['expres']:
+                        #print 'expeeeeeeeeeeeeeeeeeee',m['expres']
+                        if m['expres'].startswith('$pyFunction:'):
+                            val=doEval(m['expres'].split('$pyFunction:')[1],link,cookieJar,m)
                         else:
-                            val=doEvalFunction(m['expre'],link,cookieJar,m)
-                        if 'ActivateWindow' in m['expre']: return
+                            val=doEvalFunction(m['expres'],link,cookieJar,m)
+                        if 'ActivateWindow' in m['expres']: return
                         print 'url k val',url,k,val
 
                         url = url.replace("$doregex[" + k + "]", val)
                     else:
-                        if 'listlink' in m:
-                            listlink=m['listlink']
-                            listtitle=''
-                            listthumbnail=''
-                            
-                            if 'listtitle' in m:
-                                listtitle = m['listtitle']
-                            if 'listthumbnail' in m:
-                                listthumbnail = m['listthumbnail']
-                            ret=re.findall(m['expre'],link)
-                            return listlink,listtitle,listthumbnail,ret, m,regexs
+                        if 'listrepeat' in m:
+                            listrepeat=m['listrepeat']
+                            ret=re.findall(m['expres'],link)
+                            return listrepeat,ret, m,regexs
                              
                         if not link=='':
                             #print 'link',link
-                            reg = re.compile(m['expre']).search(link)
+                            reg = re.compile(m['expres']).search(link)
                             val=''
                             try:
                                 val=reg.group(1).strip()
                             except: traceback.print_exc()
                         else:
-                            val=m['expre']
+                            val=m['expres']
                             
                         if rawPost:
                             print 'rawpost'
@@ -1637,7 +1640,10 @@ def unpack(sJavascript,iteration=1, totaliterations=2  ):
         #aa=1/0
     else:
 
-        aSplit = sJavascript.split("rn p}('")
+        if "rn p}('" in sJavascript:
+            aSplit = sJavascript.split("rn p}('")
+        else:
+            aSplit = sJavascript.split("rn A}('")
         print aSplit
 
         p1,a1,c1,k1=('','0','0','')
@@ -1908,7 +1914,7 @@ iid=0
 def askCaptcha(m,html_page, cookieJar):
     global iid
     iid+=1
-    expre= m['expre']
+    expre= m['expres']
     page_url = m['page']
     captcha_regex=re.compile('\$LiveStreamCaptcha\[([^\]]*)\]').findall(expre)[0]
 
@@ -1926,8 +1932,8 @@ def askCaptcha(m,html_page, cookieJar):
     print ' c capurl',captcha_url
     req = urllib2.Request(captcha_url)
     req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:14.0) Gecko/20100101 Firefox/14.0.1')
-    if 'refer' in m:
-        req.add_header('Referer', m['refer'])
+    if 'referer' in m:
+        req.add_header('Referer', m['referer'])
     if 'agent' in m:
         req.add_header('User-agent', m['agent'])
     if 'setcookie' in m:
@@ -1971,8 +1977,8 @@ def askCaptchaNew(imageregex,html_page,cookieJar,m):
     print ' c capurl',captcha_url
     req = urllib2.Request(captcha_url)
     req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:14.0) Gecko/20100101 Firefox/14.0.1')
-    if 'refer' in m:
-        req.add_header('Referer', m['refer'])
+    if 'referer' in m:
+        req.add_header('Referer', m['referer'])
     if 'agent' in m:
         req.add_header('User-agent', m['agent'])
     if 'accept' in m:
@@ -1994,6 +2000,31 @@ def askCaptchaNew(imageregex,html_page,cookieJar,m):
     solution = solver.get()
     return solution
 
+#########################################################
+# Function  : GUIEditExportName                         #
+#########################################################
+# Parameter :                                           #
+#                                                       #
+# name        sugested name for export                  #
+#                                                       # 
+# Returns   :                                           #
+#                                                       #
+# name        name of export excluding any extension    #
+#                                                       #
+#########################################################
+
+
+def TakeInput(name, headname):
+
+
+    kb = xbmc.Keyboard('default', 'heading', True)
+    kb.setDefault(name)
+    kb.setHeading(headname)
+    kb.setHiddenInput(False)
+    return kb.getText()
+
+   
+#########################################################
 
 class InputWindow(xbmcgui.WindowDialog):
     def __init__(self, *args, **kwargs):
@@ -2241,9 +2272,22 @@ def addDir(name,url,mode,iconimage,fanart,description,genre,date,credits,showcon
         liz.setProperty("Fanart_Image", fanart)
         if showcontext:
             contextMenu = []
+            parentalblock =addon.getSetting('parentalblocked')
+            parentalblock= parentalblock=="true"
+            parentalblockedpin =addon.getSetting('parentalblockedpin')
+#            print 'parentalblockedpin',parentalblockedpin
+            if len(parentalblockedpin)>0:
+                if parentalblock:
+                    contextMenu.append(('Disable Parental Block','XBMC.RunPlugin(%s?mode=55&name=%s)' %(sys.argv[0], urllib.quote_plus(name))))
+                else:
+                    contextMenu.append(('Enable Parental Block','XBMC.RunPlugin(%s?mode=56&name=%s)' %(sys.argv[0], urllib.quote_plus(name))))
+                    
             if showcontext == 'source':
+            
                 if name in str(SOURCES):
                     contextMenu.append(('Remove from Sources','XBMC.RunPlugin(%s?mode=8&name=%s)' %(sys.argv[0], urllib.quote_plus(name))))
+                    
+                    
             elif showcontext == 'download':
                 contextMenu.append(('Download','XBMC.RunPlugin(%s?url=%s&mode=9&name=%s)'
                                     %(sys.argv[0], urllib.quote_plus(url), urllib.quote_plus(name))))
@@ -2356,6 +2400,16 @@ def pluginquerybyJSON(url,give_me_result=None,playlist=False):
 def addLink(url,name,iconimage,fanart,description,genre,date,showcontext,playlist,regexs,total,setCookie="",allinfo={}):
         #print 'url,name',url,name
         contextMenu =[]
+        parentalblock =addon.getSetting('parentalblocked')
+        parentalblock= parentalblock=="true"
+        parentalblockedpin =addon.getSetting('parentalblockedpin')
+#        print 'parentalblockedpin',parentalblockedpin
+        if len(parentalblockedpin)>0:
+            if parentalblock:
+                contextMenu.append(('Disable Parental Block','XBMC.RunPlugin(%s?mode=55&name=%s)' %(sys.argv[0], urllib.quote_plus(name))))
+            else:
+                contextMenu.append(('Enable Parental Block','XBMC.RunPlugin(%s?mode=56&name=%s)' %(sys.argv[0], urllib.quote_plus(name))))
+                    
         try:
             name = name.encode('utf-8')
         except: pass
@@ -2363,7 +2417,7 @@ def addLink(url,name,iconimage,fanart,description,genre,date,showcontext,playlis
         isFolder=False
         if regexs:
             mode = '17'
-            if 'listlink' in regexs:
+            if 'listrepeat' in regexs:
                 isFolder=True
                 print 'setting as folder in link'
             contextMenu.append(('[COLOR white]!!Download Currently Playing!![/COLOR]','XBMC.RunPlugin(%s?url=%s&mode=21&name=%s)'
@@ -2424,8 +2478,8 @@ def addLink(url,name,iconimage,fanart,description,genre,date,showcontext,playlis
         
         if (not play_list) and not any(x in url for x in g_ignoreSetResolved) and not '$PLAYERPROXY$=' in url:#  (not url.startswith('plugin://plugin.video.f4mTester')):
             if regexs:
-                print urllib.unquote_plus(regexs)
-                if '$pyFunction:playmedia(' not in urllib.unquote_plus(regexs) and 'notplayable' not in urllib.unquote_plus(regexs) and 'listlink' not in  urllib.unquote_plus(regexs) :
+                #print urllib.unquote_plus(regexs)
+                if '$pyFunction:playmedia(' not in urllib.unquote_plus(regexs) and 'notplayable' not in urllib.unquote_plus(regexs) and 'listrepeat' not in  urllib.unquote_plus(regexs) :
                     #print 'setting isplayable',url, urllib.unquote_plus(regexs),url
                     liz.setProperty('IsPlayable', 'true')
             else:
@@ -2433,7 +2487,7 @@ def addLink(url,name,iconimage,fanart,description,genre,date,showcontext,playlis
         else:
             addon_log( 'NOT setting isplayable'+url)
         if showcontext:
-            contextMenu = []
+            #contextMenu = []
             if showcontext == 'fav':
                 contextMenu.append(
                     ('Remove from AdryanList Favorites','XBMC.RunPlugin(%s?mode=6&name=%s)'
@@ -2499,6 +2553,33 @@ def get_epg(url, regex):
             addon_log('regex failed')
             addon_log(regex)
             return
+
+    
+def d2x(d, root="root",nested=0):
+
+    op = lambda tag: '<' + tag + '>'
+    cl = lambda tag: '</' + tag + '>\n'
+    ml = lambda v,xml: xml + op(key) + str(v) + cl(key)
+
+    xml = op(root) + '\n' if root else ""
+
+    for key,vl in d.iteritems():
+        vtype = type(vl)
+        if nested==0: key='regex' #enforcing all top level tags to be named as regex
+        if vtype is list: 
+            for v in vl:
+                v=escape(v)
+                xml = ml(v,xml)         
+        
+        if vtype is dict: 
+            xml = ml('\n' + d2x(vl,None,nested+1),xml)         
+        if vtype is not list and vtype is not dict: 
+            if not vl is None: vl=escape(vl)
+            xml = ml(vl,xml)
+
+    xml += cl(root) if root else ""
+
+    return xml
 
 
 xbmcplugin.setContent(int(sys.argv[1]), 'movies')
@@ -2566,6 +2647,8 @@ except:
     pass
 
 addon_log("Mode: "+str(mode))
+
+
 if not url is None:
     addon_log("URL: "+str(url.encode('utf-8')))
 addon_log("Name: "+str(name))
@@ -2676,44 +2759,65 @@ elif mode==17:
     addon_log("getRegexParsed")
 
     data=None
-    if regexs and 'listtitle' in urllib.unquote_plus(regexs):
-        listlink,listtitle,listthumbnail,ret,m,regexs =getRegexParsed(regexs, url)
+    if regexs and 'listrepeat' in urllib.unquote_plus(regexs):
+        listrepeat,ret,m,regexs =getRegexParsed(regexs, url)
 #        print listlink,listtitle,listthumbnail,ret
         d=''
 #        print 'm is' , m
 #        print 'regexs',regexs
         regexname=m['name']
-        regexs.pop(regexname)
-#        print 'final regexs',regexs
+        existing_list=regexs.pop(regexname)
+ #       print 'final regexs',regexs,regexname
         url=''
         import copy
+        ln=''
+        rnumber=0
         for obj in ret:
-            newcopy=copy.deepcopy(regexs)
-            listtitleT,listlinkT,listthumbnailT=listtitle,listlink,listthumbnail
-            i=0
-            for i in range(len(obj)):
-#                print 'i is ',i, len(obj)
-                for the_keyO, the_valueO in newcopy.iteritems():
-                    if the_valueO is not None:
-                        for the_key, the_value in the_valueO.iteritems():
-                            if the_value is not None:
-#                                print  'key and val',the_key, the_value
-#                                print 'aa'
-#                                print '[' + regexname+'.param'+str(i+1) + ']'
-#                                print repr(obj[i])
-                                the_valueO[the_key]=the_value.replace('[' + regexname+'.param'+str(i+1) + ']', obj[i].decode('utf-8') )
-                listtitleT,listlinkT,listthumbnailT=listtitleT.replace('[' + regexname+'.param'+str(i+1) + ']',obj[i].decode('utf-8')) , listlinkT.replace('[' + regexname+'.param'+str(i+1) + ']',obj[i].decode('utf-8')) , listthumbnailT.replace('[' + regexname+'.param'+str(i+1) + ']',obj[i].decode('utf-8'))
-            newcopy = urllib.quote(repr(newcopy))
-#            print newcopy
-            addLink(listlinkT,listtitleT.encode('utf-8', 'ignore'),listthumbnailT,'','','','',True,None,newcopy, len(ret))
-
-            ln='<item><title>%s</title><link>%s</link><thumbnail>%s</thumbnail>'%(listtitleT,listlinkT,listthumbnailT)   
+            try:
+                rnumber+=1
+                newcopy=copy.deepcopy(regexs)
+    #            print 'newcopy',newcopy, len(newcopy)
+                listrepeatT=listrepeat
+                i=0
+                for i in range(len(obj)):
+    #                print 'i is ',i, len(obj), len(newcopy)
+                    if len(newcopy)>0:
+                        for the_keyO, the_valueO in newcopy.iteritems():
+                            if the_valueO is not None:
+                                for the_key, the_value in the_valueO.iteritems():
+                                    if the_value is not None:                                
+        #                                print  'key and val',the_key, the_value
+        #                                print 'aa'
+        #                                print '[' + regexname+'.param'+str(i+1) + ']'
+        #                                print repr(obj[i])
+                                        if type(the_value) is dict:
+                                            for the_keyl, the_valuel in the_value.iteritems():
+                                                if the_valuel is not None:
+                                                    the_value[the_keyl]=the_valuel.replace('[' + regexname+'.param'+str(i+1) + ']', obj[i].decode('utf-8') )                                            
+                                        else:
+                                            the_valueO[the_key]=the_value.replace('[' + regexname+'.param'+str(i+1) + ']', obj[i].decode('utf-8') )
+                    if isinstance(obj,tuple):
+                        listrepeatT=listrepeatT.replace('[' + regexname+'.param'+str(i+1) + ']',obj[i].decode('utf-8')) 
+                    else:
+                        listrepeatT=listrepeatT.replace('[' + regexname+'.param'+str(i+1) + ']',obj.decode('utf-8')) 
+                listrepeatT=listrepeatT.replace('[' + regexname+'.param'+str(0) + ']',str(rnumber)) 
+                
+                #newcopy = urllib.quote(repr(newcopy))
+    #            print 'new regex list', repr(newcopy), repr(listrepeatT)
+    #            addLink(listlinkT,listtitleT.encode('utf-8', 'ignore'),listthumbnailT,'','','','',True,None,newcopy, len(ret))
+                regex_xml=''
+                if len(newcopy)>0:
+                    regex_xml=d2x(newcopy,'lsproroot')
+                    regex_xml=regex_xml.split('<lsproroot>')[1].split('</lsproroot')[0]
+              
+                ln+='\n<item>%s\n%s</item>'%(listrepeatT,regex_xml)   
+            except: traceback.print_exc(file=sys.stdout)
 #            print repr(ln)
 #            print newcopy
                 
-            ln+='</item>'
+#            ln+='</item>'
         #create xml here
-#        getData(url,fanart,data)
+        getData('','',ln)
         xbmcplugin.endOfDirectory(int(sys.argv[1]))
     else:
         url,setresolved = getRegexParsed(regexs, url)
@@ -2756,6 +2860,26 @@ elif mode==24:
 elif mode==25:
     addon_log("Searchin Other plugins")
     _search(url,name)
+    xbmcplugin.endOfDirectory(int(sys.argv[1]))
+
+elif mode==55:
+    addon_log("enabled lock")
+    parentalblockedpin =addon.getSetting('parentalblockedpin')
+    keyboard = xbmc.Keyboard('','Enter Pin')
+    keyboard.doModal()
+    if not (keyboard.isConfirmed() == False):
+        newStr = keyboard.getText()
+        if newStr==parentalblockedpin:
+            addon.setSetting('parentalblocked', "false")
+            xbmc.executebuiltin("XBMC.Notification(AdryanList,Parental Block Disabled,5000,"+icon+")")
+        else:
+            xbmc.executebuiltin("XBMC.Notification(AdryanList,Wrong Pin??,5000,"+icon+")")
+    xbmcplugin.endOfDirectory(int(sys.argv[1]))
+
+elif mode==56:
+    addon_log("disable lock")
+    addon.setSetting('parentalblocked', "true")
+    xbmc.executebuiltin("XBMC.Notification(AdryanList,Parental block enabled,5000,"+icon+")")
     xbmcplugin.endOfDirectory(int(sys.argv[1]))
 
 elif mode==53:
