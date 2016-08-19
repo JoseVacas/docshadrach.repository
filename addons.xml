@@ -30,7 +30,7 @@
 
 <addon id="plugin.video.adryanlist"
        name="AdryanList"
-       version="2.3.4"
+       version="2.5.1"
        provider-name="Doc Shadrach">
   <requires>
     <import addon="xbmc.python" version="2.1.0"/>
@@ -49,7 +49,7 @@
     <provides>video</provides>
   </extension>
   <extension point="xbmc.addon.metadata">
-    <summary>based on livestreamspro 2.3.4 by Shani</summary>
+    <summary>based on livestreamspro 2.5.1 by Shani</summary>
     <description>Lista de canales de Adryan.</description>
     <platform>all</platform>
   </extension>
